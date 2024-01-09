@@ -1,57 +1,116 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-Future<Album> fetchAlbum() async {
-  final response = await http.get(
-    Uri.parse('https://jsonplaceholder.typicode.com/albums/1'),
-    // Send authorization headers to the backend.
-    headers: {
-      HttpHeaders.authorizationHeader: 'Basic your_api_token_here',
+Future<Album> createAlbum(String title) async {
+  final response = await http.post(
+    Uri.parse('https://jsonplaceholder.typicode.com/albums'),
+    headers: <String, String>{
+      'Content-Type': 'application/json; charset=UTF-8',
     },
+    body: jsonEncode(<String, String>{
+      'title': title,
+    }),
+    
   );
 
-  if (response.statusCode == 200) {
-    final responseJson = jsonDecode(response.body) as Map<String, dynamic>;
-    return Album.fromJson(responseJson);
+  if (response.statusCode == 201) {
+    // If the server did return a 201 CREATED response,
+    // then parse the JSON.
+    return Album.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   } else {
-    throw Exception('Failed to load album. Status code: ${response.statusCode}');
+    // If the server did not return a 201 CREATED response,
+    // then throw an exception.
+    throw Exception('Failed to create album.');
   }
 }
 
 class Album {
-  final int userId;
   final int id;
   final String title;
 
-  const Album({
-    required this.userId,
-    required this.id,
-    required this.title,
-  });
+  const Album({required this.id, required this.title});
 
   factory Album.fromJson(Map<String, dynamic> json) {
-    if (json.containsKey('userId') &&
-        json.containsKey('id') &&
-        json.containsKey('title')) {
-      return Album(
-        userId: json['userId'] as int,
-        id: json['id'] as int,
-        title: json['title'] as String,
-      );
-    } else {
-      throw const FormatException('Failed to load album.');
-    }
+    return Album(
+      id: json['id'] as int? ?? 0,
+      title: json['title'] as String? ?? '',
+    );
   }
 }
 
-void main() async {
-  try {
-    final album = await fetchAlbum();
-    print('Album details: ${album.title}');
-  } catch (e) {
-    print('Error: $e');
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() {
+    return _MyAppState();
+  }
+}
+
+class _MyAppState extends State<MyApp> {
+  final TextEditingController _controller = TextEditingController();
+  Future<Album>? _futureAlbum;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Create Data Example',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      ),
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('Create Data Example'),
+        ),
+        body: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(8),
+          child: (_futureAlbum == null) ? buildColumn() : buildFutureBuilder(),
+        ),
+      ),
+    );
+  }
+
+  Column buildColumn() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        TextField(
+          controller: _controller,
+          decoration: const InputDecoration(hintText: 'Enter Title'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _futureAlbum = createAlbum(_controller.text);
+            });
+          },
+          child: const Text('Create Data'),
+        ),
+      ],
+    );
+  }
+
+  FutureBuilder<Album> buildFutureBuilder() {
+    return FutureBuilder<Album>(
+      future: _futureAlbum,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return Text(snapshot.data!.title);
+        } else if (snapshot.hasError) {
+          return Text('${snapshot.error}');
+        }
+
+        return const CircularProgressIndicator();
+      },
+    );
   }
 }
